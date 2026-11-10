@@ -48,6 +48,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # Dreeve needs no special privileges, so take them all away.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2019/metrics"]
       start_period: 60s
@@ -71,6 +76,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: [ "CMD", "sh", "-c", "test -f /var/www/storage/database/dreeve.db && echo 'ok' || exit 1" ]
       start_period: 5s

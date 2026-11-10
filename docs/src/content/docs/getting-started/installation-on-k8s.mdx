@@ -187,6 +187,10 @@ spec:
           securityContext: &dreeve-security-context
             # Dreeve only writes to the volumes and to /tmp.
             readOnlyRootFilesystem: true
+            # Dreeve needs no special privileges.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           volumeMounts: &dreeve-mounts
             - name: build
               mountPath: /var/www/build
