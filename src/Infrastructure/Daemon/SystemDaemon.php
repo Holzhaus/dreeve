@@ -66,7 +66,7 @@ final class SystemDaemon implements Daemon
 
     public function configureCron(): void
     {
-        /** @var list<array{key: string, mutexTtl: int, expression: string, command: string}> $jobs */
+        /** @var list<array{key: string, mutexTtl: int, expression: string, command: list<string>}> $jobs */
         $jobs = [];
         /** @var CronAction $cronAction */
         foreach ($this->settingsRepository->daemon()->getConfiguredCronActions() as $cronAction) {
@@ -86,13 +86,13 @@ final class SystemDaemon implements Daemon
                 'key' => 'runFileImport',
                 'mutexTtl' => 300,
                 'expression' => self::CRON_EVERY_5_MINUTES,
-                'command' => sprintf('bin/console %s', RunFileImportConsoleCommand::NAME),
+                'command' => ['bin/console', RunFileImportConsoleCommand::NAME],
             ];
             $jobs[] = [
                 'key' => 'runAutomationRulesBackfill',
                 'mutexTtl' => 300,
                 'expression' => self::CRON_EVERY_5_MINUTES,
-                'command' => sprintf('bin/console %s', RunAutomationRulesBackfillConsoleCommand::NAME),
+                'command' => ['bin/console', RunAutomationRulesBackfillConsoleCommand::NAME],
             ];
         }
 
@@ -100,7 +100,7 @@ final class SystemDaemon implements Daemon
             'key' => 'pruneRenderCache',
             'mutexTtl' => 300,
             'expression' => self::CRON_DAILY,
-            'command' => sprintf('bin/console %s', PruneRenderCacheConsoleCommand::NAME),
+            'command' => ['bin/console', PruneRenderCacheConsoleCommand::NAME],
         ];
 
         $webhookConfig = $this->settingsRepository->import()->getWebhookConfig();
@@ -109,7 +109,7 @@ final class SystemDaemon implements Daemon
                 'key' => 'processStravaWebhooks',
                 'mutexTtl' => 60,
                 'expression' => (string) $webhookConfig->getCronExpression(),
-                'command' => sprintf('bin/console %s', ProcessStravaWebhooksConsoleCommand::NAME),
+                'command' => ['bin/console', ProcessStravaWebhooksConsoleCommand::NAME],
             ];
         }
 

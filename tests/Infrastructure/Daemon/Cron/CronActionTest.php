@@ -30,7 +30,7 @@ class CronActionTest extends TestCase
             expression: new CronExpression('* * * * *'),
         );
 
-        $this->assertSame('bin/console app:import:strava', $cronAction->getCommand());
+        $this->assertSame(['bin/console', 'app:import:strava'], $cronAction->getCommand());
         $this->assertFalse($cronAction->supportsImportMode(ImportMode::FILES));
         $this->assertTrue($cronAction->supportsImportMode(ImportMode::STRAVA_API));
     }

@@ -40,13 +40,16 @@ enum CronActionId: string implements TranslatableWithDescription
         };
     }
 
-    public function command(): string
+    /**
+     * @return list<string>
+     */
+    public function command(): array
     {
         return match ($this) {
-            self::RUN_STRAVA_IMPORT => sprintf('bin/console %s', RunStravaImportConsoleCommand::NAME),
-            self::GEAR_MAINTENANCE_NOTIFICATION => sprintf('bin/console %s', GearMaintenanceNotificationConsoleCommand::NAME),
-            self::APP_UPDATE_AVAILABLE_NOTIFICATION => sprintf('bin/console %s', AppUpdateAvailableNotificationConsoleCommand::NAME),
-            self::BACKUP => sprintf('bin/console %s', CreateBackupConsoleCommand::NAME),
+            self::RUN_STRAVA_IMPORT => ['bin/console', RunStravaImportConsoleCommand::NAME],
+            self::GEAR_MAINTENANCE_NOTIFICATION => ['bin/console', GearMaintenanceNotificationConsoleCommand::NAME],
+            self::APP_UPDATE_AVAILABLE_NOTIFICATION => ['bin/console', AppUpdateAvailableNotificationConsoleCommand::NAME],
+            self::BACKUP => ['bin/console', CreateBackupConsoleCommand::NAME],
         };
     }
 

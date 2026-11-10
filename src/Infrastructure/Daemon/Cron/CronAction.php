@@ -35,7 +35,10 @@ final readonly class CronAction
         return $this->expression;
     }
 
-    public function getCommand(): string
+    /**
+     * @return list<string>
+     */
+    public function getCommand(): array
     {
         return $this->id->command();
     }

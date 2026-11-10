@@ -11,21 +11,24 @@ use PHPUnit\Framework\TestCase;
 
 class CronActionIdTest extends TestCase
 {
+    /**
+     * @param list<string> $expectedCommand
+     */
     #[DataProvider('provideCommands')]
-    public function testCommand(CronActionId $id, string $expectedCommand): void
+    public function testCommand(CronActionId $id, array $expectedCommand): void
     {
         $this->assertSame($expectedCommand, $id->command());
     }
 
     /**
-     * @return iterable<int, array{CronActionId, string}>
+     * @return iterable<int, array{CronActionId, list<string>}>
      */
     public static function provideCommands(): iterable
     {
-        yield [CronActionId::RUN_STRAVA_IMPORT, 'bin/console app:import:strava'];
-        yield [CronActionId::GEAR_MAINTENANCE_NOTIFICATION, 'bin/console app:notification:gear-maintenance'];
-        yield [CronActionId::APP_UPDATE_AVAILABLE_NOTIFICATION, 'bin/console app:notification:app-update-available'];
-        yield [CronActionId::BACKUP, 'bin/console app:backup:create'];
+        yield [CronActionId::RUN_STRAVA_IMPORT, ['bin/console', 'app:import:strava']];
+        yield [CronActionId::GEAR_MAINTENANCE_NOTIFICATION, ['bin/console', 'app:notification:gear-maintenance']];
+        yield [CronActionId::APP_UPDATE_AVAILABLE_NOTIFICATION, ['bin/console', 'app:notification:app-update-available']];
+        yield [CronActionId::BACKUP, ['bin/console', 'app:backup:create']];
     }
 
     #[DataProvider('provideDefaultCronExpressions')]
