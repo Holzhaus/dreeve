@@ -1,8 +1,6 @@
 #!/bin/sh
 set -e
 
-echo "date.timezone=\"${TZ:-UTC}\"" > "${PHP_INI_DIR}/conf.d/timezone.ini"
-
 # The app and daemon containers share the same image and the same SQLite database
 # volume, so only one of them may migrate. The web container is the migrator, every other
 # container waits for it to finish before touching the database.
