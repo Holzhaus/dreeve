@@ -87,6 +87,27 @@ Both containers must mount the **same** volumes. They share one database, one re
 (`./build`), one watch folder and one backups folder.
 :::
 
+### Folder permissions
+
+Dreeve does not run as root. Both containers run as user and group `65532`, so that user has to own
+the folders you mount. Create them and hand them over before the first start, as Docker would
+otherwise create them owned by root:
+
+```bash
+> mkdir -p build storage/database storage/files watch backups
+> sudo chown -R 65532:65532 build storage watch backups
+```
+
+If you would rather keep the folders owned by your own user, run the containers as that user instead
+by adding `user: "1000:1000"` (your `id -u` and `id -g`) to both services. When a container can't write
+to one of its folders, it stops right away and its log tells you which folder and which user.
+
+:::caution[Upgrading from an earlier version]
+Earlier versions ran as root, so your existing folders are owned by root, or by `PUID`/`PGID` if you
+set them. `PUID` and `PGID` no longer do anything. Either give the folders to `65532:65532` with the
+`chown` command above, or set `user:` to the `PUID:PGID` you used before.
+:::
+
 ## .env
 
 :::note[Important]
@@ -146,10 +167,6 @@ ADMIN_PASSWORD_HASH='replace-me'
 # STRAVA_CLIENT_ID=
 # STRAVA_CLIENT_SECRET=
 # STRAVA_REFRESH_TOKEN=
-
-# Uncomment and set these to run the container as a non-root user.
-# PUID=your host UID
-# PGID=your host GID
 
 # How many requests Dreeve can serve at the same time. Defaults to 4.
 # Each worker holds a booted copy of the app in memory, so raise it if pages feel

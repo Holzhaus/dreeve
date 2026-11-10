@@ -32,6 +32,9 @@ services:
             - ./watch:/var/www/watch
             - ./backups:/var/www/backups
         env_file: '.env.local'
+        # The image runs as 65532, but in development the php-cli container writes the mounted
+        # folders as root, so the app has to run as root as well.
+        user: root
         read_only: true
         tmpfs:
           - /tmp
@@ -58,6 +61,8 @@ services:
         - ./watch:/var/www/watch
         - ./backups:/var/www/backups
       env_file: ".env.local"
+      # See the app service.
+      user: root
       read_only: true
       tmpfs:
         - /tmp

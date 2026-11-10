@@ -51,7 +51,7 @@ signed build provenance.
 ### 2. Create the folders
 
 `user:` must be able to write to the three folders. Use your own uid and gid (`id -u`, `id -g`), or
-Dreeve's `PUID` and `PGID` if you set them. Create the folders and give them to that user before the
+the user Dreeve runs as (`65532:65532`, unless you set `user:` for Dreeve). Create the folders and give them to that user before the
 first start, since Docker would otherwise create them owned by root:
 
 ```bash

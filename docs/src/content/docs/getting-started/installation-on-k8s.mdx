@@ -168,6 +168,12 @@ spec:
       labels:
         app: dreeve
     spec:
+      # Dreeve runs as user 65532. fsGroup makes the volumes writable for it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
       containers:
         - name: app
           image: robiningelbrecht/dreeve:latest

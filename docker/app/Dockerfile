@@ -101,5 +101,15 @@ COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr
 # Install fit-tool (Garmin .FIT decoder).
 COPY --from=fit-tool /out/fit-tool /usr/bin/fit-tool
 
+# Run as an unprivileged user. The application itself stays owned by root and read-only for that
+# user, it only owns the directories that are meant to be volumes. Docker copies that ownership
+# into new named volumes. The UID matches the "nonroot" user of distroless and hardened images.
+RUN set -eux; \
+    addgroup -S -g 65532 nonroot; \
+    adduser -S -D -H -h /nonexistent -s /sbin/nologin -u 65532 -G nonroot nonroot; \
+    mkdir -p build storage/database storage/files watch backups; \
+    chown 65532:65532 build storage/database storage/files watch backups
+USER 65532:65532
+
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]

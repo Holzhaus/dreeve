@@ -95,9 +95,10 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD_HASH=''
 ```
 
-Your `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` and `STRAVA_REFRESH_TOKEN` stay exactly as they are, and
-`PUID` and `PGID` are unchanged too. `PROXY_HOST` and `PROXY_PORT` no longer do anything and can be
-deleted.
+Your `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` and `STRAVA_REFRESH_TOKEN` stay exactly as they are.
+`PUID`, `PGID`, `PROXY_HOST` and `PROXY_PORT` no longer do anything and can be deleted. Dreeve no
+longer runs as root, see [folder permissions](/getting-started/installation/#folder-permissions) for
+what that means for your existing folders.
 
 ### 5. Pull the new image and migrate
 

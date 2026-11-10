@@ -135,7 +135,7 @@ on purpose. Fetch the status by running:
 | `MAX_CYCLES` | `0`            | `0` runs forever; anything else runs that many cycles and exits. |
 | `LOG_LEVEL` | `info`         | `debug`, `info`, `warning`, `error` or `critical`. |
 | `LOG_FORMAT` | `text`         | `text` or `json`. |
-| `PUID` / `PGID` | -              | Own the delivered files as this user. Set them to the same values Dreeve runs as. |
+| `PUID` / `PGID` | -              | Own the delivered files as this user. Set them to the user Dreeve runs as, `65532` unless you set `user:` for Dreeve. |
 | `UMASK` / `TZ` | -              | As usual. |
 
 :::note[Important]
