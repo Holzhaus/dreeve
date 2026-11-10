@@ -17,7 +17,6 @@ ENV APP_DEBUG=0
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache \
-  bash \
   tzdata \
   zstd
 
@@ -50,15 +49,10 @@ COPY docker/app/config/snippets/ /etc/frankenphp/snippets/
 COPY docker/app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# https://getcomposer.org/doc/03-cli.md#composer-allow-superuser
-ENV COMPOSER_ALLOW_SUPERUSER=1
-
 # Add application
 COPY . /var/www/
 RUN touch /var/www/.env
 RUN rm -Rf docker
-RUN mkdir -p /var/www/var/cache/dev
-RUN mkdir -p /var/www/var/log
 
 # Install Shoutrrr.
 ARG TARGETARCH
