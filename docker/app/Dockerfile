@@ -7,6 +7,24 @@ RUN go mod download
 COPY docker/fit-tool/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /out/fit-tool .
 
+# Download Shoutrrr (sends notifications) and verify it against pinned checksums.
+# When bumping the version, take the new checksums from the checksums.txt of the release.
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS shoutrrr
+ARG TARGETARCH
+ARG SHOUTRRR_VERSION="0.23.0"
+ARG SHOUTRRR_SHA256_AMD64="c937841f1b05ff1872f55a72d297c36b18e8b3dc6217a99da9a0cdefa3eea6ec"
+ARG SHOUTRRR_SHA256_ARM64="ac106dcb5a5b9328b47279485c6c1c0a9866aa110e5bab81158495c7f4383096"
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) arch="amd64"; sha256="${SHOUTRRR_SHA256_AMD64}" ;; \
+      arm64) arch="arm64v8"; sha256="${SHOUTRRR_SHA256_ARM64}" ;; \
+      *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    wget -q -O /tmp/shoutrrr.tar.gz "https://github.com/nicholas-fedor/shoutrrr/releases/download/v${SHOUTRRR_VERSION}/shoutrrr_linux_${arch}_${SHOUTRRR_VERSION}.tar.gz"; \
+    echo "${sha256}  /tmp/shoutrrr.tar.gz" | sha256sum -c -; \
+    mkdir -p /out; \
+    tar -xzf /tmp/shoutrrr.tar.gz -C /out shoutrrr
+
 FROM dunglas/frankenphp:1-php8.5-alpine
 
 WORKDIR /var/www
@@ -55,18 +73,7 @@ RUN touch /var/www/.env
 RUN rm -Rf docker
 
 # Install Shoutrrr.
-ARG TARGETARCH
-ENV TARGETARCH=${TARGETARCH}
-ARG SHOUTRRR_VERSION="0.23.0"
-
-RUN if [ "${TARGETARCH}" = "arm64" ]; then \
-      curl -fL -o shoutrrr.tar.gz "https://github.com/nicholas-fedor/shoutrrr/releases/download/v$SHOUTRRR_VERSION/shoutrrr_linux_arm64v8_${SHOUTRRR_VERSION}.tar.gz"; \
-    elif [ "${TARGETARCH}" = "amd64" ]; then \
-      curl -fL -o shoutrrr.tar.gz "https://github.com/nicholas-fedor/shoutrrr/releases/download/v$SHOUTRRR_VERSION/shoutrrr_linux_amd64_${SHOUTRRR_VERSION}.tar.gz"; \
-    fi \
-    && tar -xzf shoutrrr.tar.gz shoutrrr \
-    && chmod +x shoutrrr \
-    && mv shoutrrr /usr/bin/shoutrrr && rm shoutrrr.tar.gz
+COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr
 
 # Install fit-tool (Garmin .FIT decoder).
 COPY --from=fit-tool /out/fit-tool /usr/bin/fit-tool
