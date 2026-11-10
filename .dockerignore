@@ -9,6 +9,7 @@ docs
 tests
 ollama
 var
+vendor
 storage
 node_modules
 public/assets/images/readme

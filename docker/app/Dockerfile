@@ -25,6 +25,20 @@ RUN set -eux; \
     mkdir -p /out; \
     tar -xzf /tmp/shoutrrr.tar.gz -C /out shoutrrr
 
+# Install the Composer dependencies and assemble the application source. Neither depends on
+# the target architecture, so this stage runs on the build platform. The PHP extensions are
+# only installed in the runtime image, hence the ignored platform requirements.
+FROM --platform=$BUILDPLATFORM composer:2 AS app-source
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-progress --ignore-platform-reqs
+COPY . ./
+RUN set -eux; \
+    rm -rf docker; \
+    composer dump-autoload --no-dev --optimize; \
+    composer run-script compress-intl; \
+    touch .env
+
 FROM dunglas/frankenphp:1-php8.5-alpine
 
 WORKDIR /var/www
@@ -68,9 +82,7 @@ COPY docker/app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Add application
-COPY . /var/www/
-RUN touch /var/www/.env
-RUN rm -Rf docker
+COPY --from=app-source /app /var/www
 
 # Install Shoutrrr.
 COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr

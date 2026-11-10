@@ -42,9 +42,6 @@ jobs:
           touch .env
           bin/console app:release:verify-version "$TAG"
 
-      - name: Compress Symfony Intl data
-        run: composer run compress-intl
-
       - name: Build countries geography asset
         run: |
           touch .env
