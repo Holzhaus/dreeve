@@ -1,5 +1,5 @@
 # Build the fit-tool Go binary (decodes Garmin .FIT files to JSON).
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS fit-tool
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS fit-tool
 ARG TARGETARCH
 WORKDIR /build
 COPY docker/fit-tool/go.mod docker/fit-tool/go.sum ./
@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /
 
 # Download Shoutrrr (sends notifications) and verify it against pinned checksums.
 # When bumping the version, take the new checksums from the checksums.txt of the release.
-FROM --platform=$BUILDPLATFORM alpine:3.22 AS shoutrrr
+FROM --platform=$BUILDPLATFORM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f AS shoutrrr
 ARG TARGETARCH
 ARG SHOUTRRR_VERSION="0.23.0"
 ARG SHOUTRRR_SHA256_AMD64="c937841f1b05ff1872f55a72d297c36b18e8b3dc6217a99da9a0cdefa3eea6ec"
@@ -28,7 +28,7 @@ RUN set -eux; \
 # Install the Composer dependencies and assemble the application source. Neither depends on
 # the target architecture, so this stage runs on the build platform. The PHP extensions are
 # only installed in the runtime image, hence the ignored platform requirements.
-FROM --platform=$BUILDPLATFORM composer:2 AS app-source
+FROM --platform=$BUILDPLATFORM composer:2@sha256:ca11f643d7791ebdd90a34fc20caf11380d434007ae539a9ea75cd9212e13dca AS app-source
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-progress --ignore-platform-reqs
@@ -39,7 +39,7 @@ RUN set -eux; \
     composer run-script compress-intl; \
     touch .env
 
-FROM dunglas/frankenphp:1-php8.5-alpine
+FROM dunglas/frankenphp:1-php8.5-alpine@sha256:bf8051e99d28fd546b0d1c1b74329f3eba0496b56bb8cd979a10ab1265e28f5c
 
 WORKDIR /var/www
 
