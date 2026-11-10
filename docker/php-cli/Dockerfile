@@ -1,5 +1,5 @@
 # Build the fit-tool Go binary (decodes Garmin .FIT files to JSON).
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS fit-tool
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS fit-tool
 ARG TARGETARCH
 WORKDIR /build
 COPY docker/fit-tool/go.mod docker/fit-tool/go.sum ./
