@@ -16,10 +16,7 @@ fi
 if [ -n "$PUID" ] && [ -n "$PGID" ] && [ "$(id -u)" = "0" ]; then
     echo "Setting permissions for PUID=$PUID PGID=$PGID..."
 
-    chown -R "$PUID:$PGID" \
-        /var/www \
-        /config/caddy \
-        /data/caddy || true
+    chown -R "$PUID:$PGID" /var/www || true
 
     echo "Permissions have been set"
 fi

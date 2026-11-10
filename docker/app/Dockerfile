@@ -47,6 +47,10 @@ WORKDIR /var/www
 ENV APP_ENV=prod
 ENV APP_DEBUG=0
 
+# Caddy keeps some runtime state (instance ID, locks) in its data directory. HTTPS is terminated
+# outside the container, so there are no certificates to keep and the state can live in /tmp.
+ENV XDG_DATA_HOME=/tmp/caddy-data
+
 # hadolint ignore=DL3018
 RUN apk add --no-cache \
   tzdata \

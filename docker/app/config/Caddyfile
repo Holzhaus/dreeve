@@ -1,6 +1,8 @@
 {
 	http_port 8080
 	auto_https off
+	# The config comes from this file on every start, there is no need to save it at runtime.
+	persist_config off
 
 	servers {
 		trusted_proxies static private_ranges
