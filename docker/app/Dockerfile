@@ -84,6 +84,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Add application
 COPY --from=app-source /app /var/www
 
+# Build the Symfony cache at build time, so the containers do not have to write it on start.
+RUN bin/console cache:warmup
+
 # Install Shoutrrr.
 COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr
 
