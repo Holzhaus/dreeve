@@ -79,6 +79,10 @@ RUN set -eux; \
         pcntl \
         zstd;
 
+# The base image allows FrankenPHP to bind to ports below 1024. Dreeve listens on 8080, and the
+# file capability keeps FrankenPHP from starting at all when the container drops all capabilities.
+RUN setcap -r /usr/local/bin/frankenphp
+
 COPY docker/app/config/php.ini ${PHP_INI_DIR}/php.ini
 COPY docker/app/config/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/app/config/snippets/ /etc/frankenphp/snippets/
