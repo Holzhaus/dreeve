@@ -1,0 +1,21 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Healthcheck for the app and the daemon container, without the need for curl or a shell.
+// Both containers run the same image, the process running as PID 1 tells them apart.
+$isWebServer = str_contains((string) @file_get_contents('/proc/1/cmdline'), 'frankenphp');
+
+if ($isWebServer) {
+    $response = @file_get_contents(
+        'http://localhost:2019/metrics',
+        context: stream_context_create(['http' => ['timeout' => 5]]),
+    );
+
+    exit(false === $response ? 1 : 0);
+}
+
+$databaseDirectory = getenv('DATABASE_DIRECTORY') ?: '/var/www/storage/database';
+
+exit(is_file($databaseDirectory.'/dreeve.db') ? 0 : 1);

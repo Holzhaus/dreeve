@@ -86,8 +86,7 @@ RUN setcap -r /usr/local/bin/frankenphp
 COPY docker/app/config/php.ini ${PHP_INI_DIR}/php.ini
 COPY docker/app/config/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/app/config/snippets/ /etc/frankenphp/snippets/
-COPY docker/app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY --chmod=755 docker/app/docker-entrypoint.sh docker/app/docker-healthcheck /usr/local/bin/
 
 # Add application
 COPY --from=app-source /app /var/www
@@ -110,6 +109,8 @@ RUN set -eux; \
     mkdir -p build storage/database storage/files watch backups; \
     chown 65532:65532 build storage/database storage/files watch backups
 USER 65532:65532
+
+HEALTHCHECK --start-period=60s CMD ["docker-healthcheck"]
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]

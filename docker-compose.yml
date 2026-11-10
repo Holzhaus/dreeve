@@ -39,7 +39,7 @@ services:
         tmpfs:
           - /tmp
         healthcheck:
-          test: ["CMD", "curl", "-f", "http://localhost:2019/metrics"]
+          test: ["CMD", "docker-healthcheck"]
           start_period: 60s
         environment:
           - TZ=Europe/Brussels
@@ -67,7 +67,7 @@ services:
       tmpfs:
         - /tmp
       healthcheck:
-        test: [ "CMD", "sh", "-c", "test -f /var/www/storage/database/dreeve.db && echo 'ok' || exit 1" ]
+        test: ["CMD", "docker-healthcheck"]
         start_period: 5s
       environment:
         - TZ=Europe/Brussels

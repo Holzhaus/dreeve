@@ -212,13 +212,13 @@ spec:
           # so an httpGet probe from the kubelet gets refused.
           readinessProbe:
             exec:
-              command: ["curl", "-f", "http://localhost:2019/metrics"]
+              command: ["docker-healthcheck"]
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
           livenessProbe:
             exec:
-              command: ["curl", "-f", "http://localhost:2019/metrics"]
+              command: ["docker-healthcheck"]
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 5

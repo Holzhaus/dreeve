@@ -54,7 +54,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2019/metrics"]
+      test: ["CMD", "docker-healthcheck"]
       start_period: 60s
     ports:
       - 8080:8080
@@ -81,7 +81,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: [ "CMD", "sh", "-c", "test -f /var/www/storage/database/dreeve.db && echo 'ok' || exit 1" ]
+      test: ["CMD", "docker-healthcheck"]
       start_period: 5s
     command: ['bin/console', 'app:daemon:run']
     networks:
