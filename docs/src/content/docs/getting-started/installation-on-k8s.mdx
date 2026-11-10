@@ -178,6 +178,9 @@ spec:
           envFrom:
             - secretRef:
                 name: dreeve-env
+          securityContext: &dreeve-security-context
+            # Dreeve only writes to the volumes and to /tmp.
+            readOnlyRootFilesystem: true
           volumeMounts: &dreeve-mounts
             - name: build
               mountPath: /var/www/build
@@ -192,6 +195,8 @@ spec:
             - name: php-ini
               mountPath: /usr/local/etc/php/conf.d/memory-limit.ini
               subPath: memory-limit.ini
+            - name: tmp
+              mountPath: /tmp
           # Mirrors the upstream compose healthcheck. Must be an exec
           # probe: Caddy's admin API (:2019) binds to localhost only,
           # so an httpGet probe from the kubelet gets refused.
@@ -220,6 +225,7 @@ spec:
           envFrom:
             - secretRef:
                 name: dreeve-env
+          securityContext: *dreeve-security-context
           volumeMounts: *dreeve-mounts
           resources:
             requests:
@@ -246,6 +252,8 @@ spec:
         - name: php-ini
           configMap:
             name: dreeve-php-ini
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
