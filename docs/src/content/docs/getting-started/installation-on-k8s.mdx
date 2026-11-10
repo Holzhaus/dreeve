@@ -231,7 +231,8 @@ spec:
         - name: daemon
           image: robiningelbrecht/dreeve:latest
           imagePullPolicy: Always
-          command: ["bin/console", "app:daemon:run"]
+          # args instead of command, so the entrypoint runs and waits for the database schema.
+          args: ["bin/console", "app:daemon:run"]
           envFrom:
             - secretRef:
                 name: dreeve-env

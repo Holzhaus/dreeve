@@ -1,0 +1,62 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Prepares the container and then replaces itself with the command of the container, just like
+// the exec at the end of a shell entrypoint. Written in PHP, so the image does not need a shell.
+
+$command = array_slice($argv, 1);
+if ([] === $command) {
+    fwrite(STDERR, "No command given.\n");
+    exit(1);
+}
+
+// The containers run as an unprivileged user, which needs to be able to write to every volume.
+// Fail early with a clear message instead of failing on the first write somewhere in the app.
+foreach (['/var/www/build', '/var/www/storage/database', '/var/www/storage/files', '/var/www/watch', '/var/www/backups'] as $directory) {
+    if (is_dir($directory) && !is_writable($directory)) {
+        $user = posix_getuid().':'.posix_getgid();
+        fwrite(STDERR, sprintf("Dreeve runs as user %s, but cannot write to %s.\n", $user, $directory));
+        fwrite(STDERR, sprintf("Give that user the volume, for example with: chown -R %s <path on the host>\n", $user));
+        exit(1);
+    }
+}
+
+$runConsoleCommand = static function (string ...$arguments): void {
+    $process = proc_open([PHP_BINARY, '/var/www/bin/console', ...$arguments], [STDIN, STDOUT, STDERR], $pipes);
+    if (false === $process) {
+        exit(1);
+    }
+    $exitCode = proc_close($process);
+    if (0 !== $exitCode) {
+        exit($exitCode);
+    }
+};
+
+// The app and daemon containers share the same image and the same SQLite database
+// volume, so only one of them may migrate. The web container is the migrator, every other
+// container waits for it to finish before touching the database.
+if ('frankenphp' === $command[0]) {
+    $runConsoleCommand('app:db:migrate', '--no-interaction');
+    $runConsoleCommand('app:cache:render:clear', '--with-version-check');
+} else {
+    echo "Waiting for the database schema to be up to date...\n";
+    $runConsoleCommand('app:db:wait-for-schema');
+    echo "Database schema updated, starting daemon\n";
+}
+
+$executable = $command[0];
+if (!str_contains($executable, '/')) {
+    foreach (explode(':', getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin') as $directory) {
+        if (is_file($directory.'/'.$executable) && is_executable($directory.'/'.$executable)) {
+            $executable = $directory.'/'.$executable;
+            break;
+        }
+    }
+}
+
+@pcntl_exec($executable, array_slice($command, 1));
+
+fwrite(STDERR, sprintf("Could not run %s: %s\n", $command[0], pcntl_strerror(pcntl_get_last_error())));
+exit(127);

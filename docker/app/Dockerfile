@@ -86,7 +86,7 @@ RUN setcap -r /usr/local/bin/frankenphp
 COPY docker/app/config/php.ini ${PHP_INI_DIR}/php.ini
 COPY docker/app/config/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/app/config/snippets/ /etc/frankenphp/snippets/
-COPY --chmod=755 docker/app/docker-entrypoint.sh docker/app/docker-healthcheck /usr/local/bin/
+COPY --chmod=755 docker/app/docker-entrypoint docker/app/docker-healthcheck /usr/local/bin/
 
 # Add application
 COPY --from=app-source /app /var/www
@@ -112,5 +112,5 @@ USER 65532:65532
 
 HEALTHCHECK --start-period=60s CMD ["docker-healthcheck"]
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint"]
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile" ]
