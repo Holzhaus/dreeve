@@ -39,7 +39,66 @@ RUN set -eux; \
     composer run-script compress-intl; \
     touch .env
 
-FROM dunglas/frankenphp:1-php8.5-alpine@sha256:bf8051e99d28fd546b0d1c1b74329f3eba0496b56bb8cd979a10ab1265e28f5c
+# The runtime image is based on Docker Hardened Images: dhi.io/static has no shell and no package
+# manager, only CA certificates and time zones. FrankenPHP and PHP come from the DHI packages.
+FROM dhi.io/static:20261020-alpine3.24@sha256:4767f889704f46bbf9b83bd0225e0e868ae0cb45ddc5627350ecf1449a019721 AS static
+
+# Build the PHP extensions Dreeve needs that the PHP of DHI's FrankenPHP package does not include,
+# from the PHP sources of the very same version.
+FROM dhi.io/alpine-base:3.24-alpine3.24-dev@sha256:266554e75cb00f88effe4048ba78b6f628d6a5ca67ac9e9727ae37a4a1299ce5 AS php-extensions
+ARG PHP_VERSION="8.5.12"
+ARG PHP_SHA256="08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209"
+ARG PHP_ZSTD_VERSION="0.18.0"
+ARG PHP_ZSTD_SHA256="223d0f77eb5a5e73cf5e7a0652dd8fde7ffdcc843e7f30eeb3998283dec847b9"
+# hadolint ignore=DL3018
+RUN set -eux; \
+    apk add --no-cache frankenphp-8.5 frankenphp-8.5-dev autoconf curl g++ gcc icu-dev libpng-dev make pkgconf xz zlib-dev zstd-dev; \
+    if [ "$(php-config --version)" != "${PHP_VERSION}" ]; then \
+      echo "FrankenPHP now ships PHP $(php-config --version), update PHP_VERSION and PHP_SHA256." >&2; \
+      exit 1; \
+    fi; \
+    curl -fsSL -o /tmp/php.tar.xz "https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz"; \
+    echo "${PHP_SHA256}  /tmp/php.tar.xz" | sha256sum -c -; \
+    curl -fsSL -o /tmp/zstd.tgz "https://pecl.php.net/get/zstd-${PHP_ZSTD_VERSION}.tgz"; \
+    echo "${PHP_ZSTD_SHA256}  /tmp/zstd.tgz" | sha256sum -c -; \
+    mkdir -p /tmp/php /tmp/zstd; \
+    tar -xJf /tmp/php.tar.xz -C /tmp/php --strip-components=1; \
+    tar -xzf /tmp/zstd.tgz -C /tmp/zstd --strip-components=1; \
+    for extension in /tmp/php/ext/bcmath /tmp/php/ext/gd /tmp/php/ext/intl /tmp/php/ext/pcntl /tmp/zstd; do \
+      cd "${extension}"; \
+      phpize; \
+      if [ "${extension}" = /tmp/zstd ]; then ./configure --with-libzstd; else ./configure; fi; \
+      make -j"$(nproc)"; \
+      make install; \
+    done
+
+# Assemble the root filesystem of the runtime image: dhi.io/static plus FrankenPHP, the libraries
+# of the extensions and env, so console commands can keep their "#!/usr/bin/env php" shebang.
+FROM php-extensions AS runtime-rootfs
+COPY --from=static / /rootfs
+# hadolint ignore=DL3018
+RUN set -eux; \
+    apk add --root /rootfs --no-cache --scripts=no frankenphp-8.5 coreutils-env icu-libs icu-data-full libpng zstd-libs; \
+    # The packages pull in busybox for the install scripts of ca-certificates, which never ran. \
+    # Remove busybox and the shell together with their entries in the package database, so \
+    # vulnerability scanners keep an accurate view of the image. \
+    shell_packages="busybox busybox-binsh ssl_client"; \
+    for file in $(apk --root /rootfs info -q -L ${shell_packages}); do rm -f "/rootfs/${file}"; done; \
+    awk -v drop=" ${shell_packages} " 'BEGIN { RS = ""; ORS = "\n\n" } { split($0, lines, "\n"); for (i in lines) if (lines[i] ~ /^P:/ && index(drop, " " substr(lines[i], 3) " ")) next; print }' \
+      /rootfs/lib/apk/db/installed > /tmp/installed; \
+    mv /tmp/installed /rootfs/lib/apk/db/installed; \
+    extension_dir="$(php-config --extension-dir)"; \
+    for extension in bcmath gd intl pcntl zstd; do \
+      cp "${extension_dir}/${extension}.so" "/rootfs${extension_dir}/"; \
+      echo "extension=${extension}" > "/rootfs/etc/php/conf.d/docker-php-ext-${extension}.ini"; \
+    done; \
+    # The unprivileged user only owns the directories that are meant to be volumes. Docker copies \
+    # that ownership into new named volumes. \
+    mkdir -p /rootfs/var/www/build /rootfs/var/www/storage/database /rootfs/var/www/storage/files /rootfs/var/www/watch /rootfs/var/www/backups; \
+    chown 65532:65532 /rootfs/var/www/build /rootfs/var/www/storage/database /rootfs/var/www/storage/files /rootfs/var/www/watch /rootfs/var/www/backups
+
+FROM static
+COPY --from=runtime-rootfs /rootfs /
 
 WORKDIR /var/www
 
@@ -51,38 +110,11 @@ ENV APP_DEBUG=0
 # outside the container, so there are no certificates to keep and the state can live in /tmp.
 ENV XDG_DATA_HOME=/tmp/caddy-data
 
-# hadolint ignore=DL3018
-RUN apk add --no-cache \
-  tzdata
+# PHP reads its configuration from /etc/php. Earlier images used /usr/local/etc/php, keep reading
+# additional ini files from there, so setups that mount their own keep working.
+ENV PHP_INI_SCAN_DIR=/etc/php/conf.d:/usr/local/etc/php/conf.d
 
-RUN set -eux; \
-	install-php-extensions \
-        bcmath \
-        ctype \
-        curl \
-        dom \
-        fileinfo \
-        gd \
-        intl \
-        mbstring \
-        opcache \
-        pdo \
-        pdo_sqlite \
-        phar \
-        session \
-        simplexml \
-        tokenizer \
-        xml \
-        xmlreader \
-        xmlwriter \
-        pcntl \
-        zstd;
-
-# The base image allows FrankenPHP to bind to ports below 1024. Dreeve listens on 8080, and the
-# file capability keeps FrankenPHP from starting at all when the container drops all capabilities.
-RUN setcap -r /usr/local/bin/frankenphp
-
-COPY docker/app/config/php.ini ${PHP_INI_DIR}/php.ini
+COPY docker/app/config/php.ini /etc/php/php.ini
 COPY docker/app/config/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/app/config/snippets/ /etc/frankenphp/snippets/
 COPY --chmod=755 docker/app/docker-entrypoint docker/app/docker-healthcheck /usr/local/bin/
@@ -90,8 +122,10 @@ COPY --chmod=755 docker/app/docker-entrypoint docker/app/docker-healthcheck /usr
 # Add application
 COPY --from=app-source /app /var/www
 
-# Build the Symfony cache at build time, so the containers do not have to write it on start.
-RUN bin/console cache:warmup
+# Build the Symfony cache at build time, so the containers do not have to write it on start. As
+# root, so the unprivileged user cannot change it. There is no shell, hence the exec form.
+USER 0:0
+RUN ["php", "bin/console", "cache:warmup"]
 
 # Install Shoutrrr.
 COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr
@@ -99,14 +133,7 @@ COPY --from=shoutrrr /out/shoutrrr /usr/bin/shoutrrr
 # Install fit-tool (Garmin .FIT decoder).
 COPY --from=fit-tool /out/fit-tool /usr/bin/fit-tool
 
-# Run as an unprivileged user. The application itself stays owned by root and read-only for that
-# user, it only owns the directories that are meant to be volumes. Docker copies that ownership
-# into new named volumes. The UID matches the "nonroot" user of distroless and hardened images.
-RUN set -eux; \
-    addgroup -S -g 65532 nonroot; \
-    adduser -S -D -H -h /nonexistent -s /sbin/nologin -u 65532 -G nonroot nonroot; \
-    mkdir -p build storage/database storage/files watch backups; \
-    chown 65532:65532 build storage/database storage/files watch backups
+# Run as the unprivileged "nonroot" user of the base image. The application stays owned by root.
 USER 65532:65532
 
 HEALTHCHECK --start-period=60s CMD ["docker-healthcheck"]
