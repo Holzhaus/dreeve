@@ -9,9 +9,10 @@ use App\Domain\Activity\ActivityId;
 use App\Domain\Activity\ActivityRepository;
 use App\Domain\Activity\ActivityWithRawData;
 use App\Domain\Backup\AvailableBackups;
+use App\Infrastructure\Archive\Archiver;
+use App\Infrastructure\Archive\CouldNotProcessArchive;
+use App\Infrastructure\Archive\TarZstArchiver;
 use App\Infrastructure\CQRS\Query\Bus\QueryBus;
-use App\Infrastructure\Process\ProcessFactory;
-use App\Infrastructure\Process\SymfonyProcessFactory;
 use App\Infrastructure\ValueObject\String\KernelProjectDir;
 use App\Infrastructure\ValueObject\Time\SerializableDateTime;
 use App\Tests\Console\ConsoleCommandTestCase;
@@ -24,12 +25,11 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\Process;
 
 class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
 {
     private Connection&MockObject $connection;
-    private ProcessFactory $processFactory;
+    private Archiver $archiver;
     private Filesystem $filesystem;
     private string $projectDirectory;
 
@@ -112,7 +112,7 @@ class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
         );
     }
 
-    public function testExecuteWhenTarFails(): void
+    public function testExecuteWhenArchivingFails(): void
     {
         $this->filesystem->dumpFile($this->projectDirectory.'/storage/files/activities/activity-1.json', 'activity');
 
@@ -125,26 +125,25 @@ class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
                 return 0;
             });
 
-        $process = $this->createStub(Process::class);
-        $process->method('getExitCode')->willReturn(2);
-        $process->method('getErrorOutput')->willReturn("tar: Cannot write: No space left on device\n");
-
         $partialBackupPath = $this->projectDirectory.'/backups/dreeve-2026-11-08-030000.tar.zst.partial';
-        $processFactory = $this->createMock(ProcessFactory::class);
-        $processFactory
+        $archiver = $this->createMock(Archiver::class);
+        $archiver
             ->expects($this->once())
             ->method('create')
-            ->with([
-                'tar', '--zstd', '-cf', $partialBackupPath, '--exclude=files/logs',
-                '-C', $this->projectDirectory.'/backups/dreeve-2026-11-08-030000', 'database',
-                '-C', $this->projectDirectory.'/storage', 'files',
-            ])
-            ->willReturnCallback(function () use ($partialBackupPath, $process): Process {
+            ->with(
+                $partialBackupPath,
+                [
+                    $this->projectDirectory.'/backups/dreeve-2026-11-08-030000/database',
+                    $this->projectDirectory.'/storage/files',
+                ],
+                [$this->projectDirectory.'/storage/files/logs'],
+            )
+            ->willReturnCallback(function () use ($partialBackupPath): never {
                 file_put_contents($partialBackupPath, 'partial backup');
 
-                return $process;
+                throw new CouldNotProcessArchive('Could not add "files": No space left on device');
             });
-        $this->processFactory = $processFactory;
+        $this->archiver = $archiver;
 
         $command = $this->getCommandInApplication(CreateBackupConsoleCommand::NAME);
         $commandTester = new CommandTester($command);
@@ -154,47 +153,9 @@ class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
 
         $this->assertEquals(Command::FAILURE, $commandTester->getStatusCode());
         $this->assertStringContainsString('The backups directory is not mounted as a volume', $commandTester->getDisplay());
-        $this->assertStringContainsString('Could not create backup, tar exited with code 2:', $commandTester->getDisplay());
-        $this->assertStringContainsString('tar: Cannot write: No space left on device', $commandTester->getDisplay());
+        $this->assertStringContainsString('Could not create backup:', $commandTester->getDisplay());
+        $this->assertStringContainsString('Could not add "files": No space left on device', $commandTester->getDisplay());
         $this->assertEquals([], array_values(array_diff(scandir($this->projectDirectory.'/backups') ?: [], ['.', '..'])));
-    }
-
-    public function testExecuteWhenTarReportsFilesChangedWhileReading(): void
-    {
-        $this->connection
-            ->expects($this->once())
-            ->method('executeStatement')
-            ->willReturnCallback(function (string $sql, array $params): int {
-                file_put_contents($params[0], 'database snapshot');
-
-                return 0;
-            });
-
-        $process = $this->createStub(Process::class);
-        $process->method('getExitCode')->willReturn(1);
-
-        $backupPath = $this->projectDirectory.'/backups/dreeve-2026-11-08-030000.tar.zst';
-        $processFactory = $this->createMock(ProcessFactory::class);
-        $processFactory
-            ->expects($this->once())
-            ->method('create')
-            ->willReturnCallback(function () use ($backupPath, $process): Process {
-                file_put_contents($backupPath.'.partial', 'backup');
-
-                return $process;
-            });
-        $this->processFactory = $processFactory;
-
-        $command = $this->getCommandInApplication(CreateBackupConsoleCommand::NAME);
-        $commandTester = new CommandTester($command);
-        $commandTester->execute([
-            'command' => $command->getName(),
-        ]);
-
-        $commandTester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('=> Created backup "backups/dreeve-2026-11-08-030000.tar.zst"', $commandTester->getDisplay());
-        $this->assertEquals('backup', file_get_contents($backupPath));
-        $this->assertFileDoesNotExist($backupPath.'.partial');
     }
 
     public function testExecuteWithAnInvalidKeepOption(): void
@@ -221,7 +182,7 @@ class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
         parent::setUp();
 
         $this->connection = $this->createMock(Connection::class);
-        $this->processFactory = new SymfonyProcessFactory();
+        $this->archiver = new TarZstArchiver();
         $this->filesystem = new Filesystem();
         $this->projectDirectory = sys_get_temp_dir().'/'.uniqid('backup-', true);
         $this->filesystem->mkdir($this->projectDirectory.'/storage');
@@ -242,7 +203,7 @@ class CreateBackupConsoleCommandTest extends ConsoleCommandTestCase
             connection: $this->connection,
             kernelProjectDir: KernelProjectDir::fromString($this->projectDirectory),
             clock: PausedClock::fromString('2026-11-08 03:00:00'),
-            processFactory: $this->processFactory,
+            archiver: $this->archiver,
             availableBackups: new AvailableBackups(
                 defaultStorage: new Flysystem(new LocalFilesystemAdapter($this->projectDirectory)),
                 kernelProjectDir: KernelProjectDir::fromString($this->projectDirectory),

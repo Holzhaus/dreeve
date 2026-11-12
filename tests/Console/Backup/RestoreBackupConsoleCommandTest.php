@@ -5,11 +5,11 @@ namespace App\Tests\Console\Backup;
 use App\Application\AppName;
 use App\Application\AppVersion;
 use App\Console\Backup\RestoreBackupConsoleCommand;
+use App\Infrastructure\Archive\TarZstArchiver;
 use App\Infrastructure\Cache\Cacheability;
 use App\Infrastructure\Cache\Render\RenderCache;
 use App\Infrastructure\Cache\Tag\CacheTags;
 use App\Infrastructure\Cache\Tag\RootCacheTag;
-use App\Infrastructure\Process\SymfonyProcessFactory;
 use App\Infrastructure\ValueObject\String\KernelProjectDir;
 use App\Tests\Console\ConsoleCommandTestCase;
 use Symfony\Component\Console\Command\Command;
@@ -111,7 +111,7 @@ class RestoreBackupConsoleCommandTest extends ConsoleCommandTestCase
         ]);
 
         $this->assertEquals(Command::FAILURE, $commandTester->getStatusCode());
-        $this->assertStringContainsString('Could not restore backup, tar exited with code 2:', $commandTester->getDisplay());
+        $this->assertStringContainsString('Could not restore backup:', $commandTester->getDisplay());
         $this->assertStringNotContainsString('=> Restoring storage files', $commandTester->getDisplay());
         $this->assertEquals(['dreeve.db'], array_values(array_diff(scandir($this->databaseDirectory) ?: [], ['.', '..'])));
         $this->assertStringEqualsFile($this->databaseDirectory.'/dreeve.db', 'live database');
@@ -158,7 +158,7 @@ class RestoreBackupConsoleCommandTest extends ConsoleCommandTestCase
         return new RestoreBackupConsoleCommand(
             kernelProjectDir: KernelProjectDir::fromString($this->projectDirectory),
             databaseDirectory: $this->databaseDirectory,
-            processFactory: new SymfonyProcessFactory(),
+            archiver: new TarZstArchiver(),
             renderCache: $this->renderCache,
         );
     }

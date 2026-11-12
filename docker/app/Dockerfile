@@ -53,8 +53,7 @@ ENV XDG_DATA_HOME=/tmp/caddy-data
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache \
-  tzdata \
-  zstd
+  tzdata
 
 RUN set -eux; \
 	install-php-extensions \

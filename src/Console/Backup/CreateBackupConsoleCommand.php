@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Console\Backup;
 
 use App\Domain\Backup\AvailableBackups;
+use App\Infrastructure\Archive\Archiver;
+use App\Infrastructure\Archive\CouldNotProcessArchive;
 use App\Infrastructure\Console\ProvideConsoleIntro;
-use App\Infrastructure\Process\ProcessFactory;
 use App\Infrastructure\Time\Clock\Clock;
 use App\Infrastructure\ValueObject\String\KernelProjectDir;
 use Doctrine\DBAL\Connection;
@@ -32,7 +33,7 @@ final class CreateBackupConsoleCommand extends Command
         private readonly Connection $connection,
         private readonly KernelProjectDir $kernelProjectDir,
         private readonly Clock $clock,
-        private readonly ProcessFactory $processFactory,
+        private readonly Archiver $archiver,
         private readonly AvailableBackups $availableBackups,
     ) {
         parent::__construct();
@@ -83,23 +84,20 @@ final class CreateBackupConsoleCommand extends Command
 
             $storageEntries = array_values(array_diff(scandir($storageDirectory) ?: [], ['.', '..', self::DATABASE_DIRECTORY]));
             $output->writeln('=> Archiving storage, this can take a while');
-            $process = $this->processFactory->create([
-                'tar', '--zstd', '-cf', $partialBackupPath, '--exclude=files/logs',
-                '-C', $stagingDirectory, self::DATABASE_DIRECTORY,
-                '-C', $storageDirectory, ...$storageEntries,
-            ]);
-            $process->setTimeout(null);
-            $process->run();
-
-            if (!in_array($process->getExitCode(), [0, 1], true)) {
+            try {
+                $this->archiver->create(
+                    archivePath: $partialBackupPath,
+                    paths: [
+                        $stagingDirectory.'/'.self::DATABASE_DIRECTORY,
+                        ...array_map(static fn (string $entry): string => $storageDirectory.'/'.$entry, $storageEntries),
+                    ],
+                    excludedPaths: [$storageDirectory.'/files/logs'],
+                );
+            } catch (CouldNotProcessArchive $exception) {
                 if (file_exists($partialBackupPath)) {
                     unlink($partialBackupPath);
                 }
-                $output->error(sprintf(
-                    "Could not create backup, tar exited with code %s:\n%s",
-                    $process->getExitCode(),
-                    trim($process->getErrorOutput()),
-                ));
+                $output->error(sprintf("Could not create backup:\n%s", $exception->getMessage()));
 
                 return Command::FAILURE;
             }

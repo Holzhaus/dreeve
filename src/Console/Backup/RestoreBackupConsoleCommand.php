@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Backup;
 
+use App\Infrastructure\Archive\Archiver;
+use App\Infrastructure\Archive\CouldNotProcessArchive;
 use App\Infrastructure\Cache\Render\RenderCache;
 use App\Infrastructure\Console\ProvideConsoleIntro;
-use App\Infrastructure\Process\ProcessFactory;
 use App\Infrastructure\ValueObject\String\KernelProjectDir;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -30,7 +31,7 @@ final class RestoreBackupConsoleCommand extends Command
         private readonly KernelProjectDir $kernelProjectDir,
         #[Autowire('%env(DATABASE_DIRECTORY)%')]
         private readonly string $databaseDirectory,
-        private readonly ProcessFactory $processFactory,
+        private readonly Archiver $archiver,
         private readonly RenderCache $renderCache,
     ) {
         parent::__construct();
@@ -77,30 +78,23 @@ final class RestoreBackupConsoleCommand extends Command
         }
 
         try {
-            foreach ([
-                '=> Extracting the database' => [
-                    'tar', '--zstd', '-xf', $backupPath,
-                    '-C', $stagingDirectory, self::DATABASE_DIRECTORY.'/dreeve.db',
-                ],
-                '=> Restoring storage files, this can take a while' => [
-                    'tar', '--zstd', '-xf', $backupPath,
-                    '-C', $storageDirectory, '--anchored', '--exclude='.self::DATABASE_DIRECTORY,
-                ],
-            ] as $step => $command) {
-                $output->writeln($step);
-                $process = $this->processFactory->create($command);
-                $process->setTimeout(null);
-                $process->run();
-
-                if (0 !== $process->getExitCode()) {
-                    $output->error(sprintf(
-                        "Could not restore backup, tar exited with code %s:\n%s",
-                        $process->getExitCode(),
-                        trim($process->getErrorOutput()),
-                    ));
-
-                    return Command::FAILURE;
+            try {
+                $output->writeln('=> Extracting the database');
+                $this->archiver->extract($backupPath, $stagingDirectory, [self::DATABASE_DIRECTORY.'/dreeve.db']);
+                if (!is_file($databaseSnapshotPath)) {
+                    throw new CouldNotProcessArchive(sprintf('"%s" does not contain a database', basename($backupPath)));
                 }
+
+                $output->writeln('=> Restoring storage files, this can take a while');
+                $this->archiver->extract(
+                    archivePath: $backupPath,
+                    targetDirectory: $storageDirectory,
+                    entries: array_values(array_diff($this->archiver->listRootEntries($backupPath), [self::DATABASE_DIRECTORY])),
+                );
+            } catch (CouldNotProcessArchive $exception) {
+                $output->error(sprintf("Could not restore backup:\n%s", $exception->getMessage()));
+
+                return Command::FAILURE;
             }
 
             $output->writeln('=> Replacing the database');
